@@ -37,8 +37,16 @@ def run(batch, seqlen_q, seqlen_kv, nheads, headdim, casual):
     tflops = total_flops / (avg_time * 1e-3) / 1e12
     return tflops, avg_time
 
+def run_once(batch, seqlen_q, seqlen_kv, nheads, headdim, casual):
+    Q = torch.ones((batch, seqlen_q, nheads, headdim), dtype=dtype, device=device)
+    K = torch.ones((batch, seqlen_kv, nheads, headdim), dtype=dtype, device=device)
+    V = torch.ones((batch, seqlen_kv, nheads, headdim), dtype=dtype, device=device)
+    out = flash_attn_with_kvcache(Q, K, V, causal=casual)
+    print("out:", out)
+
 
 if __name__ == "__main__":
     batch, seqlen_q, seqlen_kv, nheads, head_dim = 1, 4096, 4096, 32, 64
+    run_once(1, 4096, 4096, 1, 128, False)
     tflops, avg_time = run(batch, seqlen_q, seqlen_kv, nheads, head_dim, casual=False)
     print(f"TFLOPS: {tflops:.2f}, avg_time: {avg_time:.2f} ms")

@@ -86,21 +86,28 @@ def flash_split(Q, K, V):
             acc_o += torch.einsum('bhqk,bkhd->bqhd', acc_s_cast, V[:, (seqlen_kv // num_split) * ks + i * block_N : (seqlen_kv // num_split) * ks + (i + 1) * block_N, :, :])
             scores_sum = acc_s.sum(dim=-1, keepdim=False)
             logsum = logsum * scores_scale + scores_sum
-        acc_o *= torch.exp2(scores_max[:, :, :, None]).transpose(1, 2)
-        logsum *= torch.exp2(scores_max)
+        acc_o /= logsum[:, :, :, None].transpose(1, 2)
+        logsum = torch.log2(logsum) + scores_max
         gacc_o[ks, :, :, :, :] = acc_o
         glogsum[ks, :, :, :] = logsum
         # gscore_max[ks, :, :, :] = scores_max
 
 
     # Reduce
-    fz = torch.empty((batch, block_M, nheads, dim), device="cuda", dtype=torch.float).fill_(0)
-    fm = torch.empty((batch, nheads, block_M), device="cuda", dtype=torch.float).fill_(0)
-    
+    # fz = torch.empty((batch, block_M, nheads, dim), device="cuda", dtype=torch.float).fill_(0)
+    # fm = torch.empty((batch, nheads, block_M), device="cuda", dtype=torch.float).fill_(0)
+    o = torch.empty((batch, block_M, nheads, dim), device="cuda", dtype=torch.float).fill_(0)
+    lse_logsum = torch.empty((batch, nheads, block_M), device="cuda", dtype=torch.float).fill_(0)
+
+    lse_max = glogsum.max(dim=0, keepdim=False).values
     for ks in range(num_split):
-        fz += gacc_o[ks, :, :, :, :]
-        fm += glogsum[ks, :, :, :]
-    o = fz / fm[:, :, :, None].transpose(1, 2)
+        lse = glogsum[ks, :, :, :]
+        lse_logsum += torch.exp2(lse - lse_max)
+    lse_logsum = torch.log2(lse_logsum) + lse_max
+    for ks in range(num_split):
+        lse = glogsum[ks, :, :, :]
+        scale = torch.exp2(lse - lse_logsum)
+        o += gacc_o[ks, :, :, :, :] * scale[:, :, :, None].transpose(1, 2)
     return o.to(torch.float16)
 
 if __name__ == "__main__":
