@@ -46,7 +46,23 @@ def run_once(batch, seqlen_q, seqlen_kv, nheads, headdim, casual):
 
 
 if __name__ == "__main__":
-    batch, seqlen_q, seqlen_kv, nheads, head_dim = 1, 4096, 4096, 32, 64
-    run_once(1, 4096, 4096, 1, 128, False)
-    tflops, avg_time = run(batch, seqlen_q, seqlen_kv, nheads, head_dim, casual=False)
-    print(f"TFLOPS: {tflops:.2f}, avg_time: {avg_time:.2f} ms")
+
+    configs = [
+        {'model': 'Llama3-8b', 'h': 32, 'n_ctx': 8192, 'd_head': 128},
+        # {'model': 'Llama3-70b', 'h': 64, 'n_ctx': 8192, 'd_head': 128},
+    ]
+
+    batchs = [1]
+    seqlen_qs = [1, 128]
+
+    for batch in batchs:
+        for seqlen_q in seqlen_qs:
+            for config in configs:
+                print(f"Running {config['model']} with batch={batch}, seqlen_q={seqlen_q}")
+                tflops, avg_time = run(batch, seqlen_q, config['n_ctx'], config['h'], config['d_head'], casual=False)
+                print(f"TFLOPS: {tflops:.2f}, avg_time: {avg_time:.4f} ms")
+
+    # batch, seqlen_q, seqlen_kv, nheads, head_dim = 1, 4096, 4096, 32, 64
+    # run_once(1, 4096, 4096, 1, 128, False)
+    # tflops, avg_time = run(batch, seqlen_q, seqlen_kv, nheads, head_dim, casual=False)
+    # print(f"TFLOPS: {tflops:.2f}, avg_time: {avg_time:.2f} ms")
